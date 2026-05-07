@@ -1,0 +1,117 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny-all security policy
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Helpers (Phase 3: Primitive Definition) ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && getUserData(request.auth.uid).role == role;
+    }
+
+    // --- Validation Helpers (Phase 4: Pillars) ---
+    function isValidUser(data) {
+      return data.uid is string && 
+             data.fullName is string && data.fullName.size() <= 100 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.role in ['student', 'lecturer', 'admin', 'hod', 'faculty_officer'];
+    }
+
+    function isValidSession(data) {
+      return data.courseId is string && 
+             data.lecturerId is string &&
+             data.status in ['active', 'completed'] &&
+             data.type in ['qr', 'manual'];
+    }
+
+    function isValidRecord(data) {
+      return data.sessionId is string &&
+             data.studentId is string &&
+             data.status in ['present', 'late', 'absent'];
+    }
+
+    // --- Match Groups ---
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && isValidUser(incoming()) && 
+                      incoming().createdAt == request.time;
+      allow update: if (isOwner(userId) || hasRole('admin')) && 
+                      isValidUser(incoming()) &&
+                      incoming().role == existing().role && // Immutable role
+                      incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'phoneNumber', 'department', 'faculty', 'staffId', 'matricNumber']);
+    }
+
+    match /courses/{courseId} {
+      allow read: if isSignedIn();
+      allow write: if hasRole('admin') || hasRole('hod');
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if (hasRole('lecturer') || hasRole('admin')) && 
+                      incoming().lecturerId == request.auth.uid &&
+                      isValidSession(incoming()) &&
+                      incoming().createdAt == request.time;
+      allow update: if (hasRole('lecturer') || hasRole('admin')) && 
+                      incoming().lecturerId == existing().lecturerId &&
+                      isValidSession(incoming()) && (
+                        // Action: Complete Session
+                        (incoming().status == 'completed' && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'endTime'])) ||
+                        // Action: Update Metadata
+                        (incoming().diff(existing()).affectedKeys().hasOnly(['qrCodeValue']))
+                      );
+    }
+
+    match /sessions/{sessionId}/records/{recordId} {
+      allow read: if isSignedIn() && (
+        isOwner(resource.data.studentId) || 
+        hasRole('lecturer') || 
+        hasRole('admin')
+      );
+      
+      allow create: if isSignedIn() && 
+                      (request.auth.uid == incoming().studentId) &&
+                      isValidRecord(incoming()) &&
+                      get(/databases/$(database)/documents/sessions/$(sessionId)).data.status == 'active' &&
+                      incoming().timestamp == request.time;
+                      
+      allow update: if hasRole('lecturer') || hasRole('admin');
+    }
+
+    // Admin backup collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+    }
+  }
+}

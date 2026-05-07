@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a user in the system (Student, Lecturer, Admin, HOD, etc.)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["student", "lecturer", "admin", "hod", "faculty_officer"] },
+        "matricNumber": { "type": "string", "description": "For students" },
+        "staffId": { "type": "string", "description": "For lecturers" },
+        "department": { "type": "string" },
+        "faculty": { "type": "string" },
+        "phoneNumber": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "email", "role"]
+    },
+    "Course": {
+      "title": "Course",
+      "description": "Represents an academic course",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "code": { "type": "string" },
+        "unitLoad": { "type": "number" },
+        "department": { "type": "string" },
+        "level": { "type": "string" },
+        "semester": { "type": "string" },
+        "lecturerIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "code", "department"]
+    },
+    "AttendanceSession": {
+      "title": "Attendance Session",
+      "description": "A specific class session where attendance is taken",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courseId": { "type": "string" },
+        "lecturerId": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["qr", "manual"] },
+        "status": { "type": "string", "enum": ["active", "completed"] },
+        "qrCodeValue": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "courseId", "lecturerId", "startTime", "endTime", "status"]
+    },
+    "AttendanceRecord": {
+      "title": "Attendance Record",
+      "description": "A student's attendance entry for a session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["present", "late", "absent"] },
+        "location": { "type": "object" },
+        "deviceFingerprint": { "type": "string" }
+      },
+      "required": ["sessionId", "studentId", "timestamp", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/courses/{courseId}": {
+      "schema": "Course",
+      "description": "Course information"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "AttendanceSession",
+      "description": "Attendance sessions"
+    },
+    "/sessions/{sessionId}/records/{recordId}": {
+      "schema": "AttendanceRecord",
+      "description": "Attendance records for a session"
+    }
+  }
+}

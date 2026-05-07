@@ -1,0 +1,12 @@
+{
+  "name": "MAPOLY Attendance Hub",
+  "description": "Premium digital attendance management system for Moshood Abiola Polytechnic, featuring QR code scanning, role-based dashboards, and real-time academic analytics.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "Firebase Authentication",
+    "Cloud Firestore",
+    "QR Code Generation/Scanning"
+  ]
+}

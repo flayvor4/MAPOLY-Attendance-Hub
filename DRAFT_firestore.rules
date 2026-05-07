@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserRole(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    }
+
+    function hasRole(role) {
+      return isSignedIn() && getUserRole(request.auth.uid) == role;
+    }
+
+    // --- Collections ---
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(userId) && 
+                      incoming().role in ['student', 'lecturer'] &&
+                      incoming().createdAt == request.time;
+      allow update: if (isOwner(userId) || hasRole('admin')) && 
+                      incoming().role == existing().role &&
+                      incoming().diff(existing()).affectedKeys().hasOnly(['fullName', 'phoneNumber', 'department', 'faculty', 'staffId', 'matricNumber']);
+    }
+
+    match /courses/{courseId} {
+      allow read: if isSignedIn();
+      allow write: if hasRole('admin') || hasRole('hod');
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if (hasRole('lecturer') || hasRole('admin')) && 
+                      incoming().lecturerId == request.auth.uid &&
+                      incoming().createdAt == request.time;
+      allow update: if (hasRole('lecturer') || hasRole('admin')) && 
+                      incoming().lecturerId == existing().lecturerId;
+    }
+
+    match /sessions/{sessionId}/records/{recordId} {
+      allow read: if isSignedIn();
+      allow create: if (isOwner(incoming().studentId) || hasRole('lecturer') || hasRole('admin')) &&
+                      incoming().timestamp == request.time;
+      allow update: if hasRole('lecturer') || hasRole('admin');
+    }
+  }
+}
